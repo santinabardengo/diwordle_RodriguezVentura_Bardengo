@@ -1,4 +1,4 @@
-module Core (Match, match) where
+module Core (Match (..), match) where
 
 data Match
   = Correcto

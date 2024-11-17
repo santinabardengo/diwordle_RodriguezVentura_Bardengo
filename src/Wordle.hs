@@ -1,4 +1,16 @@
-module Wordle where
+module Wordle
+  ( Juego,
+    Estado (..),
+    ResultadoValidacion (..),
+    Intentos,
+    crearJuego,
+    validarInput,
+    enviarIntento,
+    obtenerIntentosDisp,
+    obtenerIntentosTotales,
+    obtenerLongitudObjetivo,
+  )
+where
 
 import Core
 import Data.Char (isUpper)
@@ -15,12 +27,12 @@ data ResultadoValidacion = OK | LongitudInvalida | CharInvalido
   deriving (Show, Eq)
 
 crearJuego :: String -> Int -> Juego
-crearJuego objetivo intentosTotales =
+crearJuego objetivoJuego intentosTotalesJuego =
   Juego
-    { objetivo = objetivo,
-      intentosTotales = intentosTotales,
-      intentosDisp = intentosTotales,
-      intentos = replicate intentosTotales []
+    { objetivo = objetivoJuego,
+      intentosTotales = intentosTotalesJuego,
+      intentosDisp = intentosTotalesJuego,
+      intentos = replicate intentosTotalesJuego []
     }
 
 tieneTilde :: String -> Bool
