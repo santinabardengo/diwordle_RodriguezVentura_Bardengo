@@ -4,6 +4,9 @@ module CLI (main) where
 
 import Core
 import Data.Char
+import Data.List (elem)
+import System.IO (readFile)
+import System.Random.Stateful
 import TinyApp.Interactive
   ( ContinueExit (Continue, Exit),
     Event (Key),
@@ -12,6 +15,14 @@ import TinyApp.Interactive
     runInteractive,
   )
 import Wordle
+  ( Estado (Adivino, EnProgresoNV, EnProgresoV, NoAdivino),
+    Intentos,
+    Juego,
+    crearJuego,
+    enviarIntento,
+    obtenerIntentos,
+    obtenerIntentosDisp,
+  )
 
 data State = State
   { juego :: Juego,
@@ -19,14 +30,27 @@ data State = State
     intentos :: Intentos,
     mensaje :: Maybe String
   }
-  deriving (Show)
+
+-- Cargar el diccionario desde un archivo de texto
+cargarDiccionario :: IO ([[Char]])
+cargarDiccionario = do
+  contenido <- readFile "diccionario.txt"
+  let palabras = map (map toUpper . filter isAlpha) (lines contenido)
+  return palabras -- Predicado para verificar si la palabra está en el diccionario
 
 main :: IO ()
 main = do
   putStrLn "¡Bienvenido a Wordle!"
-  putStrLn "Introduzca la palabra secreta: "
+  putStrLn "Introducí la palabra secreta: "
   palabra <- getLine
-  let juegoInicial = crearJuego (map toUpper palabra) 6
+  palabras <- cargarDiccionario
+  palabraAleatoria <- seleccionarPalabraAleatoria palabras
+  let juegoInicial =
+        if (palabra == "")
+          then
+            crearJuego (palabraAleatoria) 6 (\palabra -> palabra `elem` palabras)
+          else
+            crearJuego (map toUpper palabra) 6 (\palabra -> palabra `elem` palabras)
   runInteractive (wordleApp juegoInicial)
 
 wordleApp :: Juego -> Sandbox State
@@ -89,3 +113,9 @@ ingresarLetra c estado =
 borrarUltimaLetra :: State -> State
 borrarUltimaLetra estado =
   estado {palabraIngresada = init (palabraIngresada estado)}
+
+seleccionarPalabraAleatoria :: [[Char]] -> IO String
+seleccionarPalabraAleatoria palabras = do
+  let (lower, upper) = (0, length palabras - 1)
+  idx <- uniformRM (lower, upper) globalStdGen :: IO Int
+  return (palabras !! idx)
