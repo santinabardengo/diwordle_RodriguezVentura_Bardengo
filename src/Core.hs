@@ -7,6 +7,7 @@ data Match
   deriving (Eq, Show)
 
 -- >>> match "posta" "seria"
+
 -- [('s',LugarIncorrecto),('e',NoPertenece),('r',NoPertenece),('i',NoPertenece),('a',Correcto)]
 
 match :: String -> String -> [(Char, Match)]

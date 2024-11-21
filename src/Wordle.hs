@@ -9,6 +9,7 @@ module Wordle
     obtenerIntentosDisp,
     obtenerIntentosTotales,
     obtenerLongitudObjetivo,
+    obtenerIntentos,
   )
 where
 
@@ -62,3 +63,6 @@ obtenerIntentosDisp j = intentosDisp j
 
 obtenerIntentosTotales :: Juego -> Int
 obtenerIntentosTotales j = intentosTotales j
+
+obtenerIntentos :: Juego -> Intentos
+obtenerIntentos j = intentos j

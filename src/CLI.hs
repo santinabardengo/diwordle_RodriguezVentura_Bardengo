@@ -1,81 +1,91 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module CLI (main) where
 
-import Data.Char (toUpper)
+import Core
+import Data.Char
 import TinyApp.Interactive
+  ( ContinueExit (Continue, Exit),
+    Event (Key),
+    Key (KBS, KChar, KEnter, KEsc),
+    Sandbox (..),
+    runInteractive,
+  )
 import Wordle
 
 data State = State
   { juego :: Juego,
     palabraIngresada :: String,
-    intentos :: [String]
+    intentos :: Intentos,
+    mensaje :: Maybe String
   }
+  deriving (Show)
 
 main :: IO ()
 main = do
   putStrLn "¡Bienvenido a Wordle!"
-  putStrLn "Introduce la palabra secreta: "
+  putStrLn "Introduzca la palabra secreta: "
   palabra <- getLine
   let juegoInicial = crearJuego (map toUpper palabra) 6
-  let estadoInicial = State juegoInicial "" []
-  runInteractive juegoInicial estadoInicial
+  runInteractive (wordleApp juegoInicial)
 
-runInteractive :: Juego -> State -> IO ()
-runInteractive juego estado = runSandbox (mainSandbox estado juego)
-
-mainSandbox :: State -> Juego -> Sandbox State
-mainSandbox estado juego =
+wordleApp :: Juego -> Sandbox State
+wordleApp juegoInicial =
   Sandbox
-    { initialize = estado,
-      render = renderEstado juego,
-      update = actualizarEstado juego
+    { initialize = State {juego = juegoInicial, palabraIngresada = "", intentos = [], mensaje = Nothing},
+      render = \s ->
+        let intentosActuales = showIntentos (intentos s)
+            intentosDisponibles = obtenerIntentosDisp (juego s)
+            mensajeAMostrar = case mensaje s of
+              Just m -> m
+              Nothing -> ""
+         in "Intentos realizados:\n"
+              ++ intentosActuales
+              ++ "\n"
+              ++ "Palabra ingresada: "
+              ++ palabraIngresada s
+              ++ "\nIntentos disponibles: "
+              ++ show intentosDisponibles
+              ++ "\n"
+              ++ mensajeAMostrar,
+      update = \(Key key _) s ->
+        case key of
+          KEsc -> (s, Exit)
+          KEnter -> (procesarIntento s, Continue)
+          KBS -> (borrarUltimaLetra s, Continue)
+          KChar ' ' -> (s {juego = juegoInicial, palabraIngresada = "", intentos = [], mensaje = Nothing}, Continue)
+          KChar c ->
+            if isAlpha c && (mensaje s /= Just "Ganaste!" || mensaje s /= Just "Te quedaste sin turnos :(")
+              then (ingresarLetra c s, Continue)
+              else (s, Continue)
+          _ -> (s, Continue)
     }
 
-renderEstado :: Juego -> State -> String
-renderEstado juego estado =
-  let juegoActual = showJuego juego
-      intentosActuales = showIntentos (intentos estado)
-   in "Palabra secreta de "
-        ++ show (obtenerLongitudObjetivo juego)
-        ++ " letras.\n"
-        ++ "Intentos restantes: "
-        ++ show (obtenerIntentosDisp juego)
-        ++ "\n\n"
-        ++ juegoActual
-        ++ "\n\n"
-        ++ intentosActuales
-
-showJuego :: Juego -> String
-showJuego juego = unlines (map showIntento (intentos juego))
-
 showIntento :: [(Char, Match)] -> String
-showIntento intento = concatMap mostrarResultado intento
+showIntento intento = concat (map mostrarResultado intento)
   where
-    mostrarResultado (c, Correcto) = "\x1b[42m" ++ [c] ++ "\x1b[0m" -- Verde
-    mostrarResultado (c, LugarIncorrecto) = "\x1b[43m" ++ [c] ++ "\x1b[0m" -- Amarillo
-    mostrarResultado (c, NoPertenece) = "\x1b[41m" ++ [c] ++ "\x1b[0m" -- Rojo
+    mostrarResultado (c, Correcto) = "\x1b[42m" ++ "|" ++ [c] ++ "|" ++ "\x1b[0m" -- Verde
+    mostrarResultado (c, LugarIncorrecto) = "\x1b[43m" ++ "|" ++ [c] ++ "|" ++ "\x1b[0m" -- Amarillo
+    mostrarResultado (c, NoPertenece) = "\x1b[41m" ++ "|" ++ [c] ++ "|" ++ "\x1b[0m" -- Rojo
 
-showIntentos :: [String] -> String
-showIntentos = unlines . map (\i -> "| " ++ i ++ " |")
+showIntentos :: Intentos -> String
+showIntentos intentos = unlines (map formatIntento intentos)
+  where
+    formatIntento intento = showIntento intento
 
-actualizarEstado :: Juego -> Key -> State -> (State, SandboxAction)
-actualizarEstado juego key estado = case key of
-  KEsc -> (estado, Exit)
-  KEnter -> procesarIntento juego estado
-  KBS -> borrarUltimaLetra estado
-  KChar c -> ingresarLetra c estado
-  _ -> (estado, Continue)
-
-procesarIntento :: Juego -> State -> (State, SandboxAction)
-procesarIntento juego estado =
+procesarIntento :: State -> State
+procesarIntento estado =
   let intento = palabraIngresada estado
-   in case enviarIntento intento juego of
-        (Adivino, j) -> (State j "" [], Exit) -- Si adivinó la palabra, termina el juego
-        (NoAdivino, j) -> (State j "" (intentos estado ++ [intento]), Continue)
-        (EnProgresoV, j) -> (State j intento (intentos estado), Continue)
-        (EnProgresoNV, j) -> (estado, Continue)
+   in case enviarIntento intento (juego estado) of
+        (Adivino, j) -> State j "" (obtenerIntentos j) (Just "Ganaste!") -- Si adivinan, reiniciamos el juego
+        (NoAdivino, j) -> State j "" (obtenerIntentos j) (Just "Te quedaste sin turnos :(") -- Si se quedó sin turnos, no agregamos más intentos.
+        (EnProgresoV, j) -> State j "" (obtenerIntentos j) Nothing -- Si el intento es válido, lo agregamos a la lista de intentos. ESTE ESTA MAL YO DEBO HACER QUE INTENTOS ESTADO SEA INTENTOS JUEGO
+        (EnProgresoNV, _) -> estado {mensaje = Just "Intento Inválido"} -- Si el intento no es válido, no actualizamos nada.
 
-ingresarLetra :: Char -> State -> (State, SandboxAction)
-ingresarLetra c estado = (estado {palabraIngresada = palabraIngresada estado ++ [toUpper c]}, Continue)
+ingresarLetra :: Char -> State -> State
+ingresarLetra c estado =
+  estado {palabraIngresada = palabraIngresada estado ++ [toUpper c]}
 
-borrarUltimaLetra :: State -> (State, SandboxAction)
-borrarUltimaLetra estado = (estado {palabraIngresada = init (palabraIngresada estado)}, Continue)
+borrarUltimaLetra :: State -> State
+borrarUltimaLetra estado =
+  estado {palabraIngresada = init (palabraIngresada estado)}
