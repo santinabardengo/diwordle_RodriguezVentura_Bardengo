@@ -48,7 +48,7 @@ validarInput input j
 
 enviarIntento :: String -> Juego -> (Estado, Juego)
 enviarIntento intento j
-  | (obtenerIntentosDisp j) == 1 = (NoAdivino, j {intentosDisp = (obtenerIntentosDisp j) - 1})
+  | (obtenerIntentosDisp j) == 0 = (NoAdivino, j {intentosDisp = (obtenerIntentosDisp j)})
   | (validarInput intento j) /= OK = (EnProgresoNV, j)
   | intento == objetivo j = (Adivino, j {intentosDisp = (obtenerIntentosDisp j) - 1, intentos = actualizarPosicion j intento})
   | otherwise = (EnProgresoV, j {intentosDisp = (obtenerIntentosDisp j) - 1, intentos = actualizarPosicion j intento})

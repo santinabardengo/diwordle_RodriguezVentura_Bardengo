@@ -22,13 +22,15 @@ import Wordle
     enviarIntento,
     obtenerIntentos,
     obtenerIntentosDisp,
+    obtenerIntentosTotales,
   )
 
 data State = State
   { juego :: Juego,
     palabraIngresada :: String,
     intentos :: Intentos,
-    mensaje :: Maybe String
+    mensaje :: Maybe String,
+    letrasDescartadas :: String
   }
 
 -- Cargar el diccionario desde un archivo de texto
@@ -56,7 +58,7 @@ main = do
 wordleApp :: Juego -> Sandbox State
 wordleApp juegoInicial =
   Sandbox
-    { initialize = State {juego = juegoInicial, palabraIngresada = "", intentos = [], mensaje = Nothing},
+    { initialize = State {juego = juegoInicial, palabraIngresada = "", intentos = [], mensaje = Nothing, letrasDescartadas = ""},
       render = \s ->
         let intentosActuales = showIntentos (intentos s)
             intentosDisponibles = obtenerIntentosDisp (juego s)
@@ -71,17 +73,22 @@ wordleApp juegoInicial =
               ++ "\nIntentos disponibles: "
               ++ show intentosDisponibles
               ++ "\n"
-              ++ mensajeAMostrar,
+              ++ mensajeAMostrar
+              ++ "\n"
+              ++ "Letras descartadas:"
+              ++ letrasDescartadas s,
       update = \(Key key _) s ->
         case key of
           KEsc -> (s, Exit)
           KEnter -> (procesarIntento s, Continue)
           KBS -> (borrarUltimaLetra s, Continue)
           KChar ' ' -> (s {juego = juegoInicial, palabraIngresada = "", intentos = [], mensaje = Nothing}, Continue)
-          KChar c ->
-            if isAlpha c && (mensaje s /= Just "Ganaste!" || mensaje s /= Just "Te quedaste sin turnos :(")
-              then (ingresarLetra c s, Continue)
-              else (s, Continue)
+          KChar c
+            | isAlpha c && (mensaje s /= Just "Ganaste!" && mensaje s /= Just "Te quedaste sin turnos :(") ->
+                if toUpper c `elem` letrasDescartadas s
+                  then (ingresarLetraInvalida c s, Continue) -- Mensaje de letra ya descartada
+                  else (ingresarLetra c s, Continue)
+            | otherwise -> (s, Continue)
           _ -> (s, Continue)
     }
 
@@ -101,14 +108,22 @@ procesarIntento :: State -> State
 procesarIntento estado =
   let intento = palabraIngresada estado
    in case enviarIntento intento (juego estado) of
-        (Adivino, j) -> State j "" (obtenerIntentos j) (Just "Ganaste!") -- Si adivinan, reiniciamos el juego
-        (NoAdivino, j) -> State j "" (obtenerIntentos j) (Just "Te quedaste sin turnos :(") -- Si se quedó sin turnos, no agregamos más intentos.
-        (EnProgresoV, j) -> State j "" (obtenerIntentos j) Nothing -- Si el intento es válido, lo agregamos a la lista de intentos. ESTE ESTA MAL YO DEBO HACER QUE INTENTOS ESTADO SEA INTENTOS JUEGO
-        (EnProgresoNV, _) -> estado {mensaje = Just "Intento Inválido"} -- Si el intento no es válido, no actualizamos nada.
+        (Adivino, j) ->
+          State j "" (obtenerIntentos j) (Just "¡Ganaste!") (letrasDescartadas estado) -- Si adivinan, reiniciamos el juego
+        (NoAdivino, j) ->
+          State j "" (obtenerIntentos j) (Just "Te quedaste sin turnos :(") (letrasDescartadas estado) -- Si se quedó sin turnos
+        (EnProgresoV, j) ->
+          let nuevasLetrasDescartadas = agregarLetrasDescartadas ((obtenerIntentos j) !! (obtenerIntentosTotales j - obtenerIntentosDisp j - 1)) (letrasDescartadas estado)
+           in State j "" (obtenerIntentos j) Nothing nuevasLetrasDescartadas -- Actualizamos las letras descartadas
+        (EnProgresoNV, _) -> estado {mensaje = Just "Intento inválido"} -- Si el intento no es válido
 
 ingresarLetra :: Char -> State -> State
 ingresarLetra c estado =
-  estado {palabraIngresada = palabraIngresada estado ++ [toUpper c]}
+  estado {palabraIngresada = palabraIngresada estado ++ [toUpper c], mensaje = Nothing}
+
+ingresarLetraInvalida :: Char -> State -> State
+ingresarLetraInvalida c estado =
+  estado {palabraIngresada = palabraIngresada estado ++ [toUpper c], mensaje = Just "Esa letra ya fue descartada"}
 
 borrarUltimaLetra :: State -> State
 borrarUltimaLetra estado =
@@ -119,3 +134,9 @@ seleccionarPalabraAleatoria palabras = do
   let (lower, upper) = (0, length palabras - 1)
   idx <- uniformRM (lower, upper) globalStdGen :: IO Int
   return (palabras !! idx)
+
+agregarLetrasDescartadas :: [(Char, Match)] -> String -> String
+agregarLetrasDescartadas [] descartadas = descartadas
+agregarLetrasDescartadas ((c, m) : intentos) descartadas
+  | m == NoPertenece && notElem c descartadas = agregarLetrasDescartadas intentos (descartadas ++ [c])
+  | otherwise = agregarLetrasDescartadas intentos descartadas
