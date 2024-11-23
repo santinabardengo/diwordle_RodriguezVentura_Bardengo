@@ -11,7 +11,7 @@ data Match
 -- [('s',LugarIncorrecto),('e',NoPertenece),('r',NoPertenece),('i',NoPertenece),('a',Correcto)]
 
 match :: String -> String -> [(Char, Match)]
-match objetivo intento = [(intento !! i, mapearIgualdad objetivo intento i) | i <- [0 .. length (intento) - 1]]
+match objetivo intento = [(intento !! i, mapearIgualdad objetivo intento i) | i <- [0 .. length intento - 1]]
 
 cantOcurrencias :: String -> Char -> Int
 cantOcurrencias "" _ = 0

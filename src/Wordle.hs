@@ -10,6 +10,7 @@ module Wordle
     obtenerIntentosTotales,
     obtenerLongitudObjetivo,
     obtenerIntentos,
+    obtenerPalabraObjetivo,
   )
 where
 
@@ -20,7 +21,7 @@ data Juego = Juego {objetivo :: String, intentosTotales :: Int, intentosDisp :: 
 
 type Intentos = [[(Char, Match)]]
 
-data Estado = EnProgresoNV | EnProgresoV | Adivino | NoAdivino
+data Estado = EnProgresoNV | EnProgresoNoEsta | EnProgresoV | Adivino | NoAdivino
   deriving (Show, Eq)
 
 data ResultadoValidacion = OK | LongitudInvalida | CharInvalido | NoEsta
@@ -49,6 +50,7 @@ validarInput input j
 enviarIntento :: String -> Juego -> (Estado, Juego)
 enviarIntento intento j
   | (obtenerIntentosDisp j) == 0 = (NoAdivino, j {intentosDisp = (obtenerIntentosDisp j)})
+  | (validarInput intento j) == NoEsta = (EnProgresoNoEsta, j)
   | (validarInput intento j) /= OK = (EnProgresoNV, j)
   | intento == objetivo j = (Adivino, j {intentosDisp = (obtenerIntentosDisp j) - 1, intentos = actualizarPosicion j intento})
   | otherwise = (EnProgresoV, j {intentosDisp = (obtenerIntentosDisp j) - 1, intentos = actualizarPosicion j intento})
@@ -67,3 +69,6 @@ obtenerIntentosTotales j = intentosTotales j
 
 obtenerIntentos :: Juego -> Intentos
 obtenerIntentos j = intentos j
+
+obtenerPalabraObjetivo :: Juego -> String
+obtenerPalabraObjetivo j = objetivo j

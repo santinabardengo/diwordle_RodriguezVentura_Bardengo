@@ -15,7 +15,7 @@ import TinyApp.Interactive
     runInteractive,
   )
 import Wordle
-  ( Estado (Adivino, EnProgresoNV, EnProgresoV, NoAdivino),
+  ( Estado (Adivino, EnProgresoNV, EnProgresoNoEsta, EnProgresoV, NoAdivino),
     Intentos,
     Juego,
     crearJuego,
@@ -23,6 +23,7 @@ import Wordle
     obtenerIntentos,
     obtenerIntentosDisp,
     obtenerIntentosTotales,
+    obtenerPalabraObjetivo,
   )
 
 data State = State
@@ -33,12 +34,11 @@ data State = State
     letrasDescartadas :: String
   }
 
--- Cargar el diccionario desde un archivo de texto
 cargarDiccionario :: IO ([[Char]])
 cargarDiccionario = do
   contenido <- readFile "diccionario.txt"
   let palabras = map (map toUpper . filter isAlpha) (lines contenido)
-  return palabras -- Predicado para verificar si la palabra está en el diccionario
+  return palabras
 
 main :: IO ()
 main = do
@@ -48,7 +48,7 @@ main = do
   palabras <- cargarDiccionario
   palabraAleatoria <- seleccionarPalabraAleatoria palabras
   let juegoInicial =
-        if (palabra == "")
+        if palabra == ""
           then
             crearJuego (palabraAleatoria) 6 (\palabra -> palabra `elem` palabras)
           else
@@ -86,7 +86,7 @@ wordleApp juegoInicial =
           KChar c
             | isAlpha c && (mensaje s /= Just "Ganaste!" && mensaje s /= Just "Te quedaste sin turnos :(") ->
                 if toUpper c `elem` letrasDescartadas s
-                  then (ingresarLetraInvalida c s, Continue) -- Mensaje de letra ya descartada
+                  then (ingresarLetraInvalida c s, Continue)
                   else (ingresarLetra c s, Continue)
             | otherwise -> (s, Continue)
           _ -> (s, Continue)
@@ -111,11 +111,12 @@ procesarIntento estado =
         (Adivino, j) ->
           State j "" (obtenerIntentos j) (Just "¡Ganaste!") (letrasDescartadas estado) -- Si adivinan, reiniciamos el juego
         (NoAdivino, j) ->
-          State j "" (obtenerIntentos j) (Just "Te quedaste sin turnos :(") (letrasDescartadas estado) -- Si se quedó sin turnos
+          State j "" (obtenerIntentos j) (Just ("Te quedaste sin turnos! La palabra correcta es " ++ obtenerPalabraObjetivo j)) (letrasDescartadas estado) -- Si se quedó sin turnos
         (EnProgresoV, j) ->
           let nuevasLetrasDescartadas = agregarLetrasDescartadas ((obtenerIntentos j) !! (obtenerIntentosTotales j - obtenerIntentosDisp j - 1)) (letrasDescartadas estado)
            in State j "" (obtenerIntentos j) Nothing nuevasLetrasDescartadas -- Actualizamos las letras descartadas
-        (EnProgresoNV, _) -> estado {mensaje = Just "Intento inválido"} -- Si el intento no es válido
+        (EnProgresoNV, _) -> estado {mensaje = Just "La palabra tiene caracteres inválidos"} -- Si el intento tiene caracteres inválidos
+        (EnProgresoNoEsta, _) -> estado {mensaje = Just "La palabra no es válida"}
 
 ingresarLetra :: Char -> State -> State
 ingresarLetra c estado =
