@@ -6,7 +6,8 @@ data Match
   | NoPertenece
   deriving (Eq, Show)
 
--- >>> match "posta" "seria"
+-- >>> match "BURIO" "VENDI"
+-- [('V',NoPertenece),('E',NoPertenece),('N',NoPertenece),('D',NoPertenece),('I',LugarIncorrecto)]
 
 -- [('s',LugarIncorrecto),('e',NoPertenece),('r',NoPertenece),('i',NoPertenece),('a',Correcto)]
 
@@ -22,11 +23,22 @@ cantOcurrencias (x : xs) c =
     else
       cantOcurrencias xs c
 
+cantCoincidencias :: Char -> String -> String -> Int
+cantCoincidencias _ "" "" = 0
+cantCoincidencias c (i : is) (o : os) =
+  if c == i && c == o
+    then
+      1 + cantCoincidencias c is os
+    else
+      cantCoincidencias c is os
+
 mapearIgualdad :: String -> String -> Int -> Match
 mapearIgualdad objetivo intento indice
-  | (objetivo !! indice) == (intento !! indice) = Correcto
-  | ((intento !! indice) `elem` objetivo) && (cantOcurrencias objetivo (intento !! indice) >= cantOcurrencias (take (indice + 1) intento) (intento !! indice)) = LugarIncorrecto
+  | (objetivo !! indice) == (c) = Correcto
+  | (c `elem` objetivo) && (cantOcurrencias objetivo (c) >= cantOcurrencias (take (indice + 1) intento) (c)) && ((cantCoincidencias c objetivo intento) < (cantOcurrencias objetivo c)) = LugarIncorrecto
   | otherwise = NoPertenece
+  where
+    c = intento !! indice
 
---- >>> match "RANGO" "ACASS"
--- [('A',LugarIncorrecto),('C',NoPertenece),('A',NoPertenece),('S',NoPertenece),('S',NoPertenece)]
+--- >>> match "CASAS" "ACASS"
+-- [('A',LugarIncorrecto),('C',LugarIncorrecto),('A',LugarIncorrecto),('S',LugarIncorrecto),('S',Correcto)]

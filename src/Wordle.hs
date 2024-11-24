@@ -4,6 +4,7 @@ module Wordle
     ResultadoValidacion (..),
     Intentos,
     crearJuego,
+    crearJuegoConIntentos,
     validarInput,
     enviarIntento,
     obtenerIntentosDisp,
@@ -34,6 +35,16 @@ crearJuego objetivoJuego intentosTotalesJuego f =
       intentosTotales = intentosTotalesJuego,
       intentosDisp = intentosTotalesJuego,
       intentos = replicate intentosTotalesJuego [],
+      predicado = f
+    }
+
+crearJuegoConIntentos :: String -> Int -> Int -> Intentos -> (String -> Bool) -> Juego
+crearJuegoConIntentos objetivoJuego intentosTotalesJuego intentosRest intentosGuardados f =
+  Juego
+    { objetivo = objetivoJuego,
+      intentosTotales = intentosTotalesJuego,
+      intentosDisp = intentosRest,
+      intentos = intentosGuardados,
       predicado = f
     }
 
