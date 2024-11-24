@@ -67,7 +67,7 @@ enviarIntento intento j
   | otherwise = (EnProgresoV, j {intentosDisp = (obtenerIntentosDisp j) - 1, intentos = actualizarPosicion j intento})
 
 actualizarPosicion :: Juego -> String -> Intentos
-actualizarPosicion j intento = [if i == (obtenerIntentosTotales j - obtenerIntentosDisp j) then match (objetivo j) intento else (intentos j) !! i | i <- [0 .. obtenerIntentosTotales j - 1]]
+actualizarPosicion j intento = [if i == (obtenerIntentosTotales j - obtenerIntentosDisp j) then match (objetivo j) intento else (intentos j) !! i | i <- [0 .. obtenerIntentosTotales j - obtenerIntentosDisp j]]
 
 obtenerLongitudObjetivo :: Juego -> Int
 obtenerLongitudObjetivo j = length (objetivo j)
