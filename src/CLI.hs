@@ -8,8 +8,6 @@ import Core
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import Data.ByteString.Lazy (ByteString, readFile, writeFile)
 import Data.Char
-import Data.List (elem)
-import Data.Maybe (fromMaybe)
 import Data.Time
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 import GHC.Generics (Generic)
@@ -25,7 +23,6 @@ import TinyApp.Interactive
     runInteractive',
   )
 import Wordle
-import Wordle (crearJuegoConIntentos)
 
 data State = State
   { juego :: Juego,
@@ -88,7 +85,10 @@ main = do
   let modo = case args of
         ("--random" : _) -> ("random", Nothing)
         ("--daily" : []) -> ("daily", Just (Dia diaActual))
-        ("--daily" : fecha : _) -> ("daily", fmap Dia (parseDay fecha))
+        ("--daily" : fecha : _) ->
+          case parseDay fecha of
+            Just dia -> ("daily", Just (Dia dia))
+            Nothing -> error "Formato de fecha inválido. Usa YYYY-MM-DD."
         ("--palabra" : palabraFija : _) -> ("palabra", Just (Palabra (map toUpper palabraFija)))
         _ -> ("daily", Just (Dia diaActual))
 
@@ -108,6 +108,8 @@ iniciarJuegoAleatorio palabras = do
 iniciarJuegoDaily :: Day -> [String] -> IO ()
 iniciarJuegoDaily dia palabras = do
   estadoGuardado <- cargarEstado
+  diaActual <- currentDay
+  let diaActualStr = show diaActual
   let diaStr = show dia
   case estadoGuardado of
     Just
@@ -116,7 +118,7 @@ iniciarJuegoDaily dia palabras = do
             putStrLn $ "Recuperando el estado del día: " ++ diaStr
             let intentosRealizadosProcesados = procesarMuchos palabraGuardada intentosRealizadosNoProcesados
             let juegoConIntentos = crearJuegoConIntentos palabraGuardada 6 intentosRestantes intentosRealizadosProcesados (`elem` palabras)
-            iniciarJuegoConEstadoDaily juegoConIntentos palabras intentosRealizadosNoProcesados diaStr
+            iniciarJuegoConEstadoDaily juegoConIntentos intentosRealizadosNoProcesados diaActualStr
         | otherwise -> do
             -- Caso en el que la fecha ingresada es valida pero no hay una jugada guardada en dicha fecha
             palabra <- seleccionarPalabraAleatoria palabras
@@ -143,8 +145,8 @@ iniciarJuegoSinEstadoDaily palabra palabras intentosDisponibles dia = do
   guardarEstado dfinal
   pure ()
 
-iniciarJuegoConEstadoDaily :: Juego -> [[Char]] -> [String] -> String -> IO ()
-iniciarJuegoConEstadoDaily juego palabras intentosPrev dia = do
+iniciarJuegoConEstadoDaily :: Juego -> [String] -> String -> IO ()
+iniciarJuegoConEstadoDaily juego intentosPrev dia = do
   -- Ejecutamos el juego en modo interactivo
   s <- runInteractive' (wordleApp juego intentosPrev)
   -- Al terminar, guardamos el estado
@@ -188,7 +190,7 @@ actualizarEstado key s = case key of
   KEnter -> (procesarIntento s, Continue)
   KBS -> (borrarUltimaLetra s, Continue)
   KChar c
-    | isAlpha c && (mensaje s /= Just "Ganaste!" && mensaje s /= Just "Te quedaste sin turnos :(") ->
+    | isAlpha c && (mensaje s /= Just "Ganaste!") && (mensaje s /= Just ("Te quedaste sin turnos! La palabra correcta es " ++ obtenerPalabraObjetivo (juego s))) ->
         if toUpper c `elem` letrasDescartadas s
           then (ingresarLetraInvalida c s, Continue)
           else (ingresarLetra c s, Continue)
