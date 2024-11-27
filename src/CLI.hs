@@ -27,10 +27,8 @@ import Wordle
 data State = State
   { juego :: Juego,
     palabraIngresada :: String,
-    intentosPreviosProcesados :: Intentos,
     intentosPrevios :: [String],
-    mensaje :: Maybe String,
-    letrasDescartadas :: String
+    mensaje :: Maybe String
   }
 
 data GameState = GameState
@@ -113,11 +111,10 @@ iniciarJuegoDaily dia palabras = do
   let diaStr = show dia
   case estadoGuardado of
     Just
-      (GameState diaGuardado palabraGuardada intentosRestantes intentosRealizadosNoProcesados)
+      (GameState diaGuardado palabraGuardada _ intentosRealizadosNoProcesados)
         | diaGuardado == diaStr -> do
             putStrLn $ "Recuperando el estado del día: " ++ diaStr
-            let intentosRealizadosProcesados = procesarMuchos palabraGuardada intentosRealizadosNoProcesados
-            let juegoConIntentos = crearJuegoConIntentos palabraGuardada 6 intentosRestantes intentosRealizadosProcesados (`elem` palabras)
+            let juegoConIntentos = crearJuegoConIntentos palabraGuardada 6 intentosRealizadosNoProcesados (`elem` palabras)
             iniciarJuegoConEstadoDaily juegoConIntentos intentosRealizadosNoProcesados diaActualStr
         | otherwise -> do
             -- Caso en el que la fecha ingresada es valida pero no hay una jugada guardada en dicha fecha
@@ -131,8 +128,12 @@ iniciarJuegoDaily dia palabras = do
 
 iniciarJuegoFijo :: String -> [[Char]] -> IO ()
 iniciarJuegoFijo palabra palabras = do
-  let juegoInicial = crearJuego palabra 6 (`elem` palabras)
-  runInteractive (wordleApp juegoInicial [])
+  if palabra `elem` palabras
+    then
+      let juegoInicial = crearJuego palabra 6 (`elem` palabras)
+       in runInteractive (wordleApp juegoInicial [])
+    else
+      putStr "La palabra ingresada no es válida\n"
 
 iniciarJuegoSinEstadoDaily :: String -> [[Char]] -> Int -> String -> IO ()
 iniciarJuegoSinEstadoDaily palabra palabras intentosDisponibles dia = do
@@ -162,9 +163,9 @@ guardarEstado estado = do
 wordleApp :: Juego -> [String] -> Sandbox State
 wordleApp juegoInicial intPrev =
   Sandbox
-    { initialize = State {juego = juegoInicial, palabraIngresada = "", intentosPreviosProcesados = obtenerIntentos (juegoInicial), intentosPrevios = intPrev, mensaje = Nothing, letrasDescartadas = ""},
+    { initialize = State {juego = juegoInicial, palabraIngresada = "", intentosPrevios = intPrev, mensaje = Nothing},
       render = \s ->
-        let intentosActuales = showIntentos (intentosPreviosProcesados s)
+        let intentosActuales = showIntentos (obtenerIntentos (juego s))
             intentosDisponibles = obtenerIntentosDisp (juego s)
             mensajeAMostrar = case mensaje s of
               Just m -> m
@@ -180,7 +181,7 @@ wordleApp juegoInicial intPrev =
               ++ mensajeAMostrar
               ++ "\n"
               ++ "Letras descartadas:"
-              ++ letrasDescartadas s,
+              ++ calcularLetrasDescartadas (obtenerIntentos s.juego) (obtenerPalabraObjetivo s.juego),
       update = \(Key key _) s -> actualizarEstado key s
     }
 
@@ -191,7 +192,7 @@ actualizarEstado key s = case key of
   KBS -> (borrarUltimaLetra s, Continue)
   KChar c
     | isAlpha c && (mensaje s /= Just "Ganaste!") && (mensaje s /= Just ("Te quedaste sin turnos! La palabra correcta es " ++ obtenerPalabraObjetivo (juego s))) ->
-        if toUpper c `elem` letrasDescartadas s
+        if toUpper c `elem` calcularLetrasDescartadas (obtenerIntentos s.juego) (obtenerPalabraObjetivo s.juego)
           then (ingresarLetraInvalida c s, Continue)
           else (ingresarLetra c s, Continue)
     | otherwise -> (s, Continue)
@@ -207,21 +208,16 @@ showIntento intento = concatMap mostrarResultado intento
 showIntentos :: Intentos -> String
 showIntentos intentos = unlines (map showIntento intentos)
 
-procesarMuchos :: String -> [String] -> Intentos -- No hay que evaluar el intento porque ya sabemos que fue valido si se realizó en otro juego
-procesarMuchos _ [] = []
-procesarMuchos objetivo (x : xs) = (match objetivo x) : procesarMuchos objetivo xs
-
 procesarIntento :: State -> State
 procesarIntento estado =
   let intento = palabraIngresada estado
    in case enviarIntento intento (juego estado) of
         (Adivino, j) ->
-          State j "" (obtenerIntentos j) (intentosPrevios estado ++ [intento]) (Just "¡Ganaste!") (letrasDescartadas estado) -- Si adivinan, reiniciamos el juego
+          State j "" (intentosPrevios estado ++ [intento]) (Just "¡Ganaste!") -- Si adivinan, reiniciamos el juego
         (NoAdivino, j) ->
-          State j "" (obtenerIntentos j) (intentosPrevios estado ++ [intento]) (Just ("Te quedaste sin turnos! La palabra correcta es " ++ obtenerPalabraObjetivo j)) (letrasDescartadas estado) -- Si se quedó sin turnos
+          State j "" (intentosPrevios estado ++ [intento]) (Just ("Te quedaste sin turnos! La palabra correcta es " ++ obtenerPalabraObjetivo j)) --- Si se quedó sin turnos
         (EnProgresoV, j) ->
-          let nuevasLetrasDescartadas = agregarLetrasDescartadas ((obtenerIntentos j) !! (obtenerIntentosTotales j - obtenerIntentosDisp j - 1)) (letrasDescartadas estado)
-           in State j "" (obtenerIntentos j) (intentosPrevios estado ++ [intento]) Nothing nuevasLetrasDescartadas -- Actualizamos las letras descartadas
+          State j "" (intentosPrevios estado ++ [intento]) Nothing -- Actualizamos las letras descartadas
         (EnProgresoNV, _) -> estado {mensaje = Just "La palabra tiene caracteres inválidos"} -- Si el intento tiene caracteres inválidos
         (EnProgresoNoEsta, _) -> estado {mensaje = Just "La palabra no es válida"}
 
@@ -237,8 +233,18 @@ borrarUltimaLetra :: State -> State
 borrarUltimaLetra estado =
   estado {palabraIngresada = init (palabraIngresada estado)}
 
-agregarLetrasDescartadas :: [(Char, Match)] -> String -> String
-agregarLetrasDescartadas [] descartadas = descartadas
-agregarLetrasDescartadas ((c, m) : intentos) descartadas
-  | m == NoPertenece && notElem c descartadas = agregarLetrasDescartadas intentos (descartadas ++ [c])
-  | otherwise = agregarLetrasDescartadas intentos descartadas
+calcularLetrasDescartadas :: Intentos -> String -> String
+calcularLetrasDescartadas [] _ = ""
+calcularLetrasDescartadas (intento : intentos) objetivo = eliminarDuplicadas (calcularLetrasDescartadasIntento intento objetivo ++ calcularLetrasDescartadas intentos objetivo)
+
+calcularLetrasDescartadasIntento :: [(Char, Match)] -> String -> String
+calcularLetrasDescartadasIntento [] _ = []
+calcularLetrasDescartadasIntento ((c, m) : matches) objetivo
+  | m == NoPertenece && notElem c objetivo = c : calcularLetrasDescartadasIntento matches objetivo
+  | otherwise = calcularLetrasDescartadasIntento matches objetivo
+
+eliminarDuplicadas :: String -> String
+eliminarDuplicadas "" = ""
+eliminarDuplicadas (d : ds)
+  | d `elem` ds = eliminarDuplicadas ds
+  | otherwise = d : eliminarDuplicadas ds

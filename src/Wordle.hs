@@ -38,15 +38,10 @@ crearJuego objetivoJuego intentosTotalesJuego f =
       predicado = f
     }
 
-crearJuegoConIntentos :: String -> Int -> Int -> Intentos -> (String -> Bool) -> Juego
-crearJuegoConIntentos objetivoJuego intentosTotalesJuego intentosRest intentosGuardados f =
-  Juego
-    { objetivo = objetivoJuego,
-      intentosTotales = intentosTotalesJuego,
-      intentosDisp = intentosRest,
-      intentos = intentosGuardados,
-      predicado = f
-    }
+crearJuegoConIntentos :: String -> Int -> [String] -> (String -> Bool) -> Juego
+crearJuegoConIntentos objetivoJuego intentosTotalesJuego intentosGuardados f =
+  let juegoInicial = crearJuego objetivoJuego intentosTotalesJuego f
+   in foldl (\j i -> snd (enviarIntento i j)) juegoInicial intentosGuardados
 
 tieneTilde :: String -> Bool
 tieneTilde intento = any (`elem` "áéíóúÁÉÍÓÚ") intento
